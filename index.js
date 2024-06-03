@@ -1,72 +1,87 @@
 const express = require('express')
-const uuid = require('uuid')
 const cors = require('cors')
 
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
 const port = 3000
 const app = express()
 app.use(express.json())
 app.use(cors())
 
-const orders = []
-
-const checkOrderId = (request, response, next) => {
+const checkOrderId = async (request, response, next) => {
     const { id } = request.params
 
-    const index = orders.findIndex(order => order.id === id)
+    const order = await prisma.order.findUnique({ where: { id } })
 
-    if (index < 0) {
+    if (!order) {
         return response.status(404).json({ message: "Order not found" })
     }
-    
-    request.orderIndex = index
-    request.orderId = id
 
+    request.order = order
     next()
 }
 
-app.get('/orders', (request, response) => {
+app.get('/orders', async (request, response) => {
+    const orders = await prisma.order.findMany()
     return response.json(orders)
 })
 
-app.post('/orders', (request, response) => {
+app.post('/orders', async (request, response) => {
     const { order, clientName, price } = request.body
 
-    const newOrder = { id: uuid.v4(), order, clientName, price, status: 'pending' }
-
-    orders.push(newOrder)
+    const newOrder = await prisma.order.create({
+        data: {
+            order,
+            clientName,
+            price,
+        }
+    })
 
     return response.status(201).json(newOrder)
 })
 
-app.put('/orders/:id', checkOrderId, (request, response) => {
-    const { order, clientName, price } = request.body
-    const index = request.orderIndex
-    const id = request.orderId
+app.put('/orders/:id', checkOrderId, async (request, response) => {
+    const { order, clientName, price } = request.body;
+    const { id } = request.params;
 
-    const updatedOrder = { id, order, clientName, price, status: orders[index].status }
+    const updatedOrder = await prisma.order.update({
+        where: { id },
+        data: { order, clientName, price }
+    });
 
-    orders[index] = updatedOrder
+    return response.json(updatedOrder);
+});
 
-    return response.json(updatedOrder)
-    
-})
+app.delete('/orders/:id', checkOrderId, async (request, response) => {
+    const { id } = request.params
 
-app.delete('/orders/:id', checkOrderId, (request, response) => {
-    const index = request.orderIndex
-
-    orders.splice(index, 1)
+    await prisma.order.delete({ where: { id } })
 
     return response.status(204).json()
 })
 
-app.patch('/orders/:id/status', checkOrderId, (request, response) => {
-    const index = request.orderIndex
+app.patch('/orders/:id/status', checkOrderId, async (request, response) => {
+    const { id } = request.params
 
-    orders[index].status = 'ready'
+    const updatedOrder = await prisma.order.update({
+        where: { id },
+        data: { status: 'ready' }
+    })
 
-    return response.json(orders[index])
+    return response.json(updatedOrder)
 })
 
 app.listen(port, () => {
     console.log(`Server started on port ${port}`)
 })
+
+
+
+
+//mongoDB
+//usuário: ricardocanuto
+//senha: il4wB0ksEBVb8Q6j
+
+//mongodb+srv://ricardocanuto:<password>@orders.5fs2bxf.mongodb.net/?retryWrites=true&w=majority&appName=Ordersnpx prisma
+
